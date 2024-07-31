@@ -1,0 +1,25 @@
+[package]
+name = "botmon_cli"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+argh = "0.1.12"
+aws-config = { version = "1.5.4", features = ["behavior-version-latest"] }
+aws-sdk-dynamodb = "1.37.0"
+chrono = { version = "0.4.38", features = ["serde"] }
+color-eyre = "0.6.3"
+crossterm = { version = "0.27.0", features = ["event-stream"] }
+fastrand = "2.1.0"
+futures = "0.3.30"
+fuzzy-matcher = "0.3.7"
+itertools = "0.13.0"
+ratatui = "0.27.0"
+serde = { version = "1.0.204", features = ["derive"] }
+serde_dynamo = { version = "4.2.14", features = ["aws-sdk-dynamodb+1"] }
+serde_json = "1.0.120"
+thiserror = "1.0.61"
+throbber-widgets-tui = "0.6.0"
+tokio = { version = "1.38.0", features = ["full"] }
+tokio-util = "0.7.11"
+tui-input = "0.9.0"
