@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::fmt::Display;
 
 use aws_sdk_dynamodb::{types::AttributeValue, Client};
 use chrono::{DateTime, Duration, Utc};
@@ -163,7 +163,7 @@ pub async fn get_all_bot_stats_for_period(client: &Client, table_name: &str, buc
     
     // println!("query returned {} items", items.len());
     
-    for (index, item) in items.iter().enumerate() {
+    for (_index, item) in items.iter().enumerate() {
         stats.push(match from_item(item.clone()) {
             Ok(a) => a,
             Err(e) => {
@@ -236,7 +236,7 @@ pub async fn get_bot_stats_from_time(client: &Client, bot_id: &str ,table_name: 
     
     println!("query returned {} items", items.len());
    
-    for (index, item) in items.iter().enumerate() {
+    for (_index, item) in items.iter().enumerate() {
         stats.push(match from_item(item.clone()) {
             Ok(a) => a,
             Err(e) => {

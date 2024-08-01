@@ -1,8 +1,8 @@
 
 use color_eyre::eyre::Context;
-use ratatui::{layout::{Constraint, Direction, Layout, Rect}, style::{self, Color, Modifier, Style, Stylize}, text::Text, widgets::{canvas, Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, StatefulWidget, Table}, Frame};
+use ratatui::{layout::{Constraint, Direction, Layout, Rect}, style::{self, Color, Modifier, Style, Stylize}, text::Text, widgets::{Block, Borders, Cell, List, ListItem, ListState, Paragraph, Row, Scrollbar, ScrollbarOrientation, Table}, Frame};
 
-use crate::{app::AppState, bot_stats::QueueStats, pages::bot::{BotPageState, BotViewState}};
+use crate::{bot_stats::QueueStats, pages::bot::{BotPageState, BotViewState}};
 
 use style::palette::tailwind;
 use super::center_rect;

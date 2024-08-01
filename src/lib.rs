@@ -1,8 +1,7 @@
-use std::{io::{self, stdout, Stdout}, path::Path, str::FromStr};
+use std::{io::{self, stdout, Stdout}, str::FromStr};
 
 use argh::FromArgs;
 use chrono::Duration;
-use color_eyre::eyre::Error;
 use crossterm::{execute, terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen}};
 use ratatui::{backend::CrosstermBackend, style::{Color, Style}, Terminal};
 
@@ -82,7 +81,7 @@ pub enum Bus {
 impl FromStr for Bus {
     type Err = color_eyre::Report;
 
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
+    fn from_str(_s: &str) -> Result<Self, Self::Err> {
         todo!()
     }
 }

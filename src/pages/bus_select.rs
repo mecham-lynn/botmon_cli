@@ -1,11 +1,9 @@
 use std::collections::HashMap;
 
-use chrono::NaiveDate;
-use crossterm::event::{KeyCode, KeyEvent};
 use itertools::Itertools;
 use ratatui::widgets::ScrollbarState;
 
-use crate::{app::Navigate, leo_config::LeoConfig};
+use crate::leo_config::LeoConfig;
 
 #[derive(Debug)]
 pub struct BusSelectState {

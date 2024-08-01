@@ -1,6 +1,4 @@
 use bot::{bot_search_and_select_ui, bot_view_ui};
-use chart::render_executions;
-use color_eyre::eyre::bail;
 use itertools::Itertools;
 use loading::loading;
 use main::main_ui;

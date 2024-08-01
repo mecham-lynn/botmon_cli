@@ -2,11 +2,10 @@ use std::{cmp::{max, min}, collections::HashMap};
 
 use serde::{Deserialize, Serialize};
 
-use crate::dynamo::Period;
 
 #[derive(Deserialize, Debug)]
 pub struct BotStats {
-    current: ExecutionStats,
+    _current: ExecutionStats,
 }
 #[derive(Deserialize, Debug, Default, Serialize, Clone)]
 pub struct QueueStats {
@@ -171,7 +170,7 @@ pub fn merge_bot_stats(bot_stats: &[BotDynamoStatsRecord]) -> CondensedStats {
 
 #[cfg(test)]
 mod bot_stats_tests {
-    use std::fs::{read_to_string, File};
+    use std::fs::read_to_string;
 
     use super::{merge_bot_stats, BotDynamoStatsRecord};
 

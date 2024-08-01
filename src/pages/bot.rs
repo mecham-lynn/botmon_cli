@@ -1,18 +1,16 @@
-use std::{collections::HashMap, fs::File, io::Write};
+use std::collections::HashMap;
 
-use chrono::Duration;
 use color_eyre::eyre::{bail, Result};
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
-use tui_input::{backend::crossterm::EventHandler, Input};
-use std::fs::read_to_string;
+use tui_input::Input;
 
-use crate::{app::Navigate, bot_stats::{BotDynamoStatsRecord, BotStats, QueueStats, StatsOrEmpty}};
+use crate::{app::Navigate, bot_stats::{BotDynamoStatsRecord, QueueStats, StatsOrEmpty}};
 
 #[derive(Debug)]
-pub struct BotViewState {
+pub struct BotViewState {  
    pub vertical_scroll_state: ScrollbarState,
    pub vertical_scroll: usize,
    pub setting: BotSettings,
@@ -23,11 +21,11 @@ pub struct BotViewState {
    // pub write_connections: Vec<Connection>
 }
 
-#[derive(Debug)]
-pub struct Connection {
-    name: String,
-    num_actions: u32,
-}
+// #[derive(Debug)]
+// pub struct Connection {
+//     name: String,
+//     num_actions: u32,
+// }
 
 impl BotViewState {
     pub fn new(setting: BotSettings, stats: Vec<BotDynamoStatsRecord>) -> Self {
