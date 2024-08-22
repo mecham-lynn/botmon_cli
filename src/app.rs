@@ -1,39 +1,73 @@
 use std::env::current_dir;
+use std::fmt::Debug;
 use std::{collections::HashMap, time::Instant};
 use std::fs::read_to_string;
 
 use aws_config::SdkConfig;
 use aws_sdk_dynamodb::Client;
 use chrono::{Duration, Utc};
-use color_eyre::eyre::{bail, Context, Error};
+use color_eyre::eyre::{bail, Context};
 use crossterm::event::{self, poll, Event, KeyCode, KeyEvent, KeyEventKind};
-use futures::FutureExt;
+use ratatui::widgets::ScrollbarState;
 use ratatui::Frame;
+use serde::Serialize;
 use throbber_widgets_tui::ThrobberState;
 use tui_input::backend::crossterm::EventHandler;
 
-use crate::dynamo::{get_all_bot_details, get_all_bot_stats_for_period, AllBucketsBuilder, Period};
+use crate::dynamo::{get_all_bot_details, get_bot_stats_from_time, BotBucket, Period};
 use crate::pages::bus_select::BusSelectState;
-use crate::{leo_config::LeoConfig, pages::bot::BotPageState, ui::render_ui, Tui, AppParams};
+use crate::{leo_config::LeoConfig, pages::bot::BotPageState, ui::render_ui, Tui, app_params::AppParams};
 
-#[derive(Debug)]
+#[derive(Serialize)]
 pub struct AppState {
     pub mode: AppTab,
     pub bus_select: BusSelectState,
     pub tab_index: usize,
     pub chart_data: Vec<(f64, f64)>,
     pub bot_page: BotPageState,
+    pub debug_mode: bool,
+    #[serde(skip_serializing)]
     pub start_time: Instant,
+    #[serde(skip_serializing)]
     pub refresh_at: Instant,
+    #[serde(skip_serializing)]
     pub refresh_rate: Duration,
     pub selected_bus: Option<String>,
     pub buses: HashMap<String, LeoConfig>,
     pub loaded_config: Option<LeoConfig>,
+    #[serde(skip_serializing)]
     pub aws_config: SdkConfig,
+    #[serde(skip_serializing)]
     pub client: Client,
+    #[serde(skip_serializing)]
     pub throbber_state: ThrobberState,
+    #[serde(skip_serializing)]
     pub tick_rate: Duration,
+    pub vertical_scroll_state: ScrollbarState,
+    pub vertical_scroll: usize,
+    pub stop_scroll: bool,
     exit: bool
+}
+
+impl Debug for AppState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("AppState")
+            .field("mode", &self.mode)
+            .field("bus_select", &self.bus_select)
+            .field("tab_index", &self.tab_index)
+            .field("chart_data", &self.chart_data)
+            .field("bot_page", &self.bot_page)
+            .field("debug_mode", &self.debug_mode)
+            .field("start_time", &self.start_time)
+            .field("refresh_at", &self.refresh_at)
+            .field("refresh_rate", &self.refresh_rate)
+            .field("selected_bus", &self.selected_bus)
+            .field("buses", &self.buses)
+            .field("loaded_config", &self.loaded_config)
+            .field("vertical_scroll_state", &self.vertical_scroll_state)
+            .field("vertical_scroll", &self.vertical_scroll)
+            .finish()
+    }
 }
 
 impl AppState {
@@ -68,7 +102,7 @@ impl AppState {
     
     async fn handle_events(&mut self) -> color_eyre::Result<()> {
         match event::read()? {
-            
+                      
             Event::Key(key_event) if key_event.kind == KeyEventKind::Press => self
                 .handle_key_event(key_event)
                 .await
@@ -88,6 +122,12 @@ impl AppState {
         match key_event.code {
             KeyCode::Char('q') | KeyCode::Esc => Ok(self.exit()),
             KeyCode::Home => Ok(self.return_home()),
+            KeyCode::F(5) => {
+                if self.debug_mode {
+                    self.mode = AppTab::StateView;
+                }
+                Ok(())
+            }
             // KeyCode::Left => self.decrement_count()?,
             // KeyCode::Right => self.increment_count()?,
             _ => {
@@ -123,7 +163,16 @@ impl AppState {
                             }, 
                             KeyCode::Enter => {
                                 if list_len > 0 {
-                                    self.bot_page.selected_bot_name = Some(self.bot_page.search_results[self.bot_page.current_select_index].clone());
+                                    let bot_name = self.bot_page.search_results[self.bot_page.current_select_index].clone();
+                                    self.bot_page.selected_bot_name = Some(bot_name.clone());
+                                    let bot_id = format!("bot:{bot_name}");
+                                    let start_bucket = BotBucket::new(Period::Minute15, Some(Utc::now() - Duration::hours(1)));
+                                    let end_bucket = BotBucket::new(Period::Minute15, None);
+                                    
+                                    
+                                    // Make call to get the stats (DEFAULT is one hour)
+                                    
+                                    self.bot_page.stats = get_bot_stats_from_time(&self.client, &bot_id, &self.loaded_config.as_ref().unwrap().leo_stats, start_bucket, end_bucket).await?;
                                     self.bot_page.search.reset();
                                     self.bot_page.search_results.clear();
                                     self.bot_page.get_bot_details()?;
@@ -168,25 +217,23 @@ impl AppState {
                                 if bus_len > 0 {
                                     self.selected_bus = Some(self.bus_select.buses[self.bus_select.bus_selected_index].clone());
                                     if let Some(selected_bus) = self.selected_bus.as_ref() {
+                                        // If the region of the bus is different than the region in the sdkConfig we need to reconfigure the sdkConfig to match that region BEFORE we attempt to laod that data from Dynamodb
                                         self.loaded_config = self.buses.get(selected_bus).cloned();
-                                        //TODO: now we grab the data from db
-                                        self.load_bot_data().await?;
+                                        // if let (Some(loaded_config), Some(sdk_region)) = (self.loaded_config.as_ref(), self.aws_config.region()){
+                                        //     let loaded_region = Region::new(&loaded_config.region);
+                                        //     if &loaded_region != sdk_region {
+                                                
+                                        //     }
+                                        // }
+                                        
+                                        // Grab all the bot settings for the given bus
+                                        self.load_bot_settings().await?;
+                                        // TODO: load the queue(s) as well
+                                    
+                                        
+                                        // self.load_bot_data().await?;
                                         self.mode = AppTab::Main;
-                                        // self.mode = AppTab::Loading;
-                                        // let client = self.client.clone();
-                                        // let stats_table = self.loaded_config.as_ref().unwrap().leo_stats.clone();
-                                        // let cron_table = self.loaded_config.as_ref().unwrap().leo_cron.clone();
-                                        // let bucket = AllBucketsBuilder::new(Period::Minute15)
-                                        //         .past_ms(Duration::days(1))
-                                        //         .build();
-                                        // let mut tasks = vec![];
                                         
-                                        
-                                        // tasks.push(tokio::spawn(async move {
-                                            
-                                        //     get_all_bot_stats_for_period(client, stats_table, bucket).await
-                                        // }).await?);
-                                        // tasks.push(tokio::sp)
                                     }
                                 }
                             }
@@ -219,6 +266,31 @@ impl AppState {
                         },
                         None => bail!("cannot navigate a non-existant bot; \n{self:#?}"),
                     },
+                    AppTab::StateView => {
+                        match key_event.code {
+                            KeyCode::Up => {
+                                self.vertical_scroll = self.vertical_scroll.saturating_sub(1);
+                                self.vertical_scroll_state = self.vertical_scroll_state.position(self.vertical_scroll);
+                            },
+                            KeyCode::Down => {
+                                if !self.stop_scroll {
+                                    self.vertical_scroll = self.vertical_scroll.saturating_add(1);
+                                    self.vertical_scroll_state = self.vertical_scroll_state.position(self.vertical_scroll);
+                                }
+                            },
+                            KeyCode::Tab => {
+                                self.mode = AppTab::Main;
+                            },
+                            // KeyCode::End => {
+                            //     self.vertical_scroll_state.last();
+                            //     self.vertical_scroll = self.vertical_scroll_state)
+                            // }
+                            a => {
+                                bail!("invalid key {a:?} pressed");
+                            }
+                        }
+                        Ok(())
+                    }
                 }
             }
         }
@@ -249,16 +321,8 @@ impl AppState {
         &self.chart_data
     }
 
-    async fn load_bot_data(&mut self) -> color_eyre::Result<()> {
+    async fn load_bot_settings(&mut self) -> color_eyre::Result<()> {
    
-        // Get the bot stats
-        let bucket = AllBucketsBuilder::new(Period::Minute15)
-            .past_ms(Duration::days(1))
-            .build();
-
-        let bots = get_all_bot_stats_for_period(&self.client, &self.loaded_config.as_ref().unwrap().leo_stats, bucket).await?;
-        self.bot_page.stats = bots;
-
         let bot_settings = get_all_bot_details(&self.client, &self.loaded_config.as_ref().unwrap().leo_cron).await?;
         self.bot_page.all_bots = Some(bot_settings);
 
@@ -307,6 +371,8 @@ impl AppState {
             AppTab::BusSelect
         };
         
+        let debug_mode = params.debug;
+        
 
         Ok(Self {
             start_time: Instant::now(),
@@ -325,6 +391,10 @@ impl AppState {
             client,
             throbber_state: ThrobberState::default(),
             tick_rate: Duration::milliseconds(250),
+            vertical_scroll_state: ScrollbarState::default(),
+            vertical_scroll: 0,
+            debug_mode,
+            stop_scroll: false,
         })
     }
     
@@ -351,7 +421,7 @@ impl Navigate for AppState {
 
 
 /// Control's which page that will show
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Serialize)]
 pub enum AppTab {
     Main,
     BusSelect,
@@ -359,14 +429,18 @@ pub enum AppTab {
     Queue,
     BotView,
     Loading,
+    StateView,
 }
 
 impl AppTab {
-    pub fn get_keys(&self) -> Vec<(&str, &str)>{
+    pub fn get_keys(&self, debug_mode: &bool) -> Vec<(&str, &str)>{
         let mut keys = vec![
             ("Home", "Main Menu"), 
-            ("Esc|Q", "Quit")
+            ("Esc|Q", "Quit"),
         ];
+        if *debug_mode {
+            keys.push(("State View", "F5"))
+        }
         
         match self {
             AppTab::Main | AppTab::Bot | AppTab::Queue | AppTab::BusSelect => keys.append(&mut vec![
@@ -376,7 +450,7 @@ impl AppTab {
                 // ("Home", "Main Menu"),
                 // ("Esc", "Quit")
             ]),
-            AppTab::BotView => keys.append(&mut vec![
+            AppTab::BotView | AppTab::StateView => keys.append(&mut vec![
                 ("↑", "Scroll Up"),
                 ("↓", "Scroll Down"),
                 ("Tab", "Back")

@@ -1,6 +1,4 @@
 use bot::{bot_search_and_select_ui, bot_view_ui};
-use chart::render_executions;
-use color_eyre::eyre::bail;
 use itertools::Itertools;
 use loading::loading;
 use main::main_ui;
@@ -12,6 +10,7 @@ mod main;
 mod bot;
 mod bus_select;
 mod loading;
+mod current_state;
 
 pub fn render_ui(frame: &mut Frame, app: &mut AppState) {
     let area = center_rect(frame.size(), 95, 95);
@@ -30,9 +29,10 @@ pub fn render_ui(frame: &mut Frame, app: &mut AppState) {
         }
         AppTab::BusSelect => bus_select::bus_select(&mut app.bus_select, layout[0], frame),
         AppTab::Loading => loading(app, area, frame),
+        AppTab::StateView => current_state::view_app_state(app, area, frame),
        }
     
-    render_bottom_bar(&app.mode, layout[1], frame)
+    render_bottom_bar(&app.mode, layout[1], frame, &app.debug_mode)
     // Split the area when we want to show other charts
     // render_executions(frame, area, app)
     
@@ -60,8 +60,8 @@ fn center_rect(r: Rect, percent_x: u16, percent_y: u16) -> Rect {
         .split(popup_layout[1])[1]
 }
 
-pub fn render_bottom_bar(mode: &AppTab, area: Rect, f: &mut Frame) {
-    let keys = mode.get_keys();
+pub fn render_bottom_bar(mode: &AppTab, area: Rect, f: &mut Frame, debug_mod: &bool) {
+    let keys = mode.get_keys(debug_mod);
     let spans = keys
         .iter()
         .flat_map(|(key, desc)| {

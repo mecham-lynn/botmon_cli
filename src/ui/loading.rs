@@ -1,4 +1,4 @@
-use ratatui::{layout::{Constraint, Direction, Layout, Rect}, Frame};
+use ratatui::{layout::Rect, Frame};
 
 use crate::app::AppState;
 

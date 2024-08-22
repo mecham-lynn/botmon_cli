@@ -1,8 +1,7 @@
-use std::{fs::read_to_string, path::Path};
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Deserialize, Serialize)]
 #[serde(rename_all="PascalCase")]
 pub struct LeoConfig {
     pub leo_cron: String,

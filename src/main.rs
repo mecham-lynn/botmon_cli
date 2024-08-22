@@ -1,4 +1,4 @@
-use botmon_cli::{app::AppState, error::install_hooks, init, restore, AppParams};
+use botmon_cli::{app::AppState, error::install_hooks, init, restore, app_params::AppParams};
 
 #[tokio::main]
 async fn main() -> color_eyre::Result<()>{

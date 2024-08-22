@@ -1,13 +1,12 @@
 use std::collections::HashMap;
 
-use chrono::NaiveDate;
-use crossterm::event::{KeyCode, KeyEvent};
 use itertools::Itertools;
 use ratatui::widgets::ScrollbarState;
+use serde::Serialize;
 
-use crate::{app::Navigate, leo_config::LeoConfig};
+use crate::leo_config::LeoConfig;
 
-#[derive(Debug)]
+#[derive(Debug, Serialize)]
 pub struct BusSelectState {
     pub buses: Vec<String>,
     pub bus_selected_index: usize,

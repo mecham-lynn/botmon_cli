@@ -2,7 +2,7 @@ use std::panic;
 
 use color_eyre::{config::HookBuilder, eyre};
 
-use crate::{restore, Tui};
+use crate::restore;
 
 
 // #[derive(Debug, Error)]

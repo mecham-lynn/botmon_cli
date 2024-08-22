@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fmt::Display};
+use std::fmt::Display;
 
 use aws_sdk_dynamodb::{types::AttributeValue, Client};
 use chrono::{DateTime, Duration, Utc};
@@ -90,14 +90,14 @@ impl AllBucketsBuilder {
     }
 }
 
-
+#[derive(Debug)]
 pub struct BotBucket {
     period: Period,
-    date: DateTime<Utc>
+    date: Option<DateTime<Utc>>
 }
 
 impl BotBucket {
-    pub fn new(period: Period, date: DateTime<Utc>) -> Self {
+    pub fn new(period: Period, date: Option<DateTime<Utc>>) -> Self {
         Self {
             period,
             date,
@@ -107,20 +107,28 @@ impl BotBucket {
 
 impl Display for BotBucket {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let date = match self.period {
-            Period::Minute | Period::Minute15 | Period::Minute5=> {
-                self.date.format("%Y-%m-%d %H:%M").to_string()
+        match self.date {
+            Some(date) => {
+                let date = match self.period {
+                    Period::Minute | Period::Minute15 | Period::Minute5=> {
+                        date.format("%Y-%m-%d %H:%M").to_string()
+                    },
+                    Period::Hour => {
+                        date.format("%Y-%m-%d %H").to_string()
+                    },
+                    Period::Day => {
+                        date.format("%Y-%m-%d").to_string()
+                    },
+                    Period::Week => unimplemented!("haven't found an instance of a week yet"),
+                };
+                
+                write!(f, "{}_{date}", self.period)
             },
-            Period::Hour => {
-                self.date.format("%Y-%m-%d %H").to_string()
+            None => {
+                write!(f, "{}__", self.period)
             },
-            Period::Day => {
-                self.date.format("%Y-%m-%d").to_string()
-            },
-            Period::Week => unimplemented!("haven't found an instance of a week yet"),
-        };
+        }
         
-        write!(f, "{}_{date}", self.period)
     }
 }
 
@@ -163,7 +171,7 @@ pub async fn get_all_bot_stats_for_period(client: &Client, table_name: &str, buc
     
     // println!("query returned {} items", items.len());
     
-    for (index, item) in items.iter().enumerate() {
+    for (_index, item) in items.iter().enumerate() {
         stats.push(match from_item(item.clone()) {
             Ok(a) => a,
             Err(e) => {
@@ -204,12 +212,15 @@ pub async fn get_all_bot_details(client: &Client, table_name: &str)-> color_eyre
 }
 
 
-// Queries the dynamo table for all stats in range for a given bot_id (KINDA WORKS????)
-pub async fn get_bot_stats_from_time(client: &Client, bot_id: &str ,table_name: &str, bucket: BotBucket) -> color_eyre::Result<Vec<BotDynamoStatsRecord>> {
+/// Queries the dynamo table for all stats in range for a given bot_id.
+/// We HAVE to do a BETWEEN dynamo call and we want to sort descending as well. Which period we want to search should be a param we pass in
+/// 
+pub async fn get_bot_stats_from_time(client: &Client, bot_id: &str ,table_name: &str, start_bucket: BotBucket, end_bucket: BotBucket) -> color_eyre::Result<Vec<BotDynamoStatsRecord>> {
     
     
-    println!("bucket = {bucket}");
-    println!("bot_id = {bot_id}");
+    // println!("bucket = {start_bucket}");
+    // println!("end_bucket = {end_bucket:#?}");
+    // println!("bot_id = {bot_id}");
     
     let mut stats = vec![];
     let output = client.query()
@@ -218,8 +229,14 @@ pub async fn get_bot_stats_from_time(client: &Client, bot_id: &str ,table_name: 
         .expression_attribute_names("#id", "id")
         .expression_attribute_names("#bucket", "bucket")
         .expression_attribute_values(":id", AttributeValue::S(bot_id.to_owned()))
-        .expression_attribute_values(":bucket", AttributeValue::S(bucket.to_string()))
-        .key_condition_expression("#id = :id and #bucket > :bucket")
+        .expression_attribute_values(":start_bucket", AttributeValue::S(start_bucket.to_string()))
+        .expression_attribute_values(":end_bucket", AttributeValue::S(end_bucket.to_string()))
+        
+        // This sets the results to be sorted in descending order which we want
+        .scan_index_forward(false)
+        // Due to how the data is structured on the stats table we need to ALWAYS do a **between** condition between two time periods. 
+        // It can be as simple as taking the current bucket "hour_{date}" and making {date} a _, which I think will work for our purposes. 
+        .key_condition_expression("#id = :id and #bucket between :start_bucket and :end_bucket")
         .send().await.wrap_err("failed to get bot stats")?;
     
     // let output = client.query()
@@ -236,7 +253,7 @@ pub async fn get_bot_stats_from_time(client: &Client, bot_id: &str ,table_name: 
     
     println!("query returned {} items", items.len());
    
-    for (index, item) in items.iter().enumerate() {
+    for (_index, item) in items.iter().enumerate() {
         stats.push(match from_item(item.clone()) {
             Ok(a) => a,
             Err(e) => {

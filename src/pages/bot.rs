@@ -1,18 +1,16 @@
-use std::{collections::HashMap, fs::File, io::Write};
+use std::{collections::HashMap, fmt::Debug};
 
-use chrono::Duration;
 use color_eyre::eyre::{bail, Result};
-use crossterm::event::{Event, KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent};
 use fuzzy_matcher::{skim::SkimMatcherV2, FuzzyMatcher};
 use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
-use tui_input::{backend::crossterm::EventHandler, Input};
-use std::fs::read_to_string;
+use tui_input::Input;
 
-use crate::{app::Navigate, bot_stats::{BotDynamoStatsRecord, BotStats, QueueStats, StatsOrEmpty}};
+use crate::{app::Navigate, bot_stats::{BotDynamoStatsRecord, QueueStats, StatsOrEmpty}};
 
-#[derive(Debug)]
-pub struct BotViewState {
+#[derive(Debug, Serialize)]
+pub struct BotViewState {  
    pub vertical_scroll_state: ScrollbarState,
    pub vertical_scroll: usize,
    pub setting: BotSettings,
@@ -23,11 +21,11 @@ pub struct BotViewState {
    // pub write_connections: Vec<Connection>
 }
 
-#[derive(Debug)]
-pub struct Connection {
-    name: String,
-    num_actions: u32,
-}
+// #[derive(Debug)]
+// pub struct Connection {
+//     name: String,
+//     num_actions: u32,
+// }
 
 impl BotViewState {
     pub fn new(setting: BotSettings, stats: Vec<BotDynamoStatsRecord>) -> Self {
@@ -94,7 +92,7 @@ impl Navigate for BotViewState {
     }
 }
 
-#[derive(Debug, Default)]
+#[derive(Default, Serialize)]
 pub struct BotPageState {
     pub bots: Vec<String>,
     pub stats: Vec<BotDynamoStatsRecord>, // String for now will need to be a type
@@ -107,11 +105,30 @@ pub struct BotPageState {
     // settings: 
 }
 
-// impl Default for BotPageState {
-//     fn default() -> Self {
-//         Self::new()
-//     }
-// }
+impl Debug for BotPageState {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let stats = if !self.stats.is_empty() {
+            &self.stats[0..2].to_vec()
+        } else {
+            &self.stats
+        };
+        let bots = if !self.bots.is_empty() {
+            &self.bots[0..10].to_vec()
+        } else {
+            &self.bots
+        };
+        f.debug_struct("BotPageState")
+            .field("bots", bots)
+            .field("stats", stats)
+            .field("selected_bot_name", &self.selected_bot_name)
+            .field("current_select_index", &self.current_select_index)
+            .field("selected_bot", &self.selected_bot)
+            .field("all_bots", &self.all_bots.as_ref().map(|a| a[0..2].to_vec()))
+            .field("search", &self.search)
+            .field("search_results", &self.search_results)
+            .finish()
+    }
+}
 
 impl BotPageState {
 
@@ -167,11 +184,12 @@ impl BotPageState {
                 // let all_stats = read_to_string("./all_bot_stats.json")?;
                 // let stats: Vec<BotDynamoStatsRecord> = serde_json::from_str(&all_stats)?;
                 
-                let bot_stats: Vec<BotDynamoStatsRecord> = self.stats.iter()
-                    .filter(|a| a.id.contains(selected) && a.period == "minute_15")
-                    .cloned()
-                    .collect();
-                let settings = match all_bots.iter().find(|&a| a.id.contains(selected)).cloned() {
+                // let bot_stats: Vec<BotDynamoStatsRecord> = self.stats.iter()
+                //     .filter(|a| a.id.contains(selected) && a.period == "minute_15")
+                //     .cloned()
+                //     .collect();
+                
+                let settings = match all_bots.iter().find(|&a| &a.id == selected).cloned() {
                     Some(a) => a,
                     None => bail!("unable to locate settings for selected bot '{selected}'"),
                 };
@@ -181,7 +199,7 @@ impl BotPageState {
                 // let mut file = File::create(&stats_filename)?;
                 // file.write_all(serde_json::to_string(&bot_stats)?.as_bytes())?;
                 // DON'T REMOVE BELOW
-                self.selected_bot = Some(BotViewState::new(settings, bot_stats));
+                self.selected_bot = Some(BotViewState::new(settings, self.stats.clone()));
             },
         };
         
