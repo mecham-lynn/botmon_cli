@@ -70,7 +70,7 @@ pub struct CondensedStats {
 }
 
 impl CondensedStats {
-    pub fn merge_execution_stats(&mut self, other: &BotDynamoStatsRecord) {
+    pub fn merge_execution_stats(&mut self, other: &DynamoStatsRecord) {
         if let Some(other_execution_stats) = other.current.execution.as_ref() {
             if let Some(o_completions) = other_execution_stats.completions {
                 self.execution_stats.completions += o_completions;
@@ -134,7 +134,7 @@ impl CondensedStats {
 
 
 #[derive(Deserialize, Debug, Serialize, Clone)]
-pub struct BotDynamoStatsRecord {
+pub struct DynamoStatsRecord {
     pub id: String,
     pub bucket: String,
     pub current: ExecutionStats,
@@ -145,7 +145,7 @@ pub struct BotDynamoStatsRecord {
 }
 
 /// Merges all of the bot_stats into a single instance of CondensedStats
-pub fn merge_bot_stats(bot_stats: &[BotDynamoStatsRecord]) -> CondensedStats {
+pub fn merge_bot_stats(bot_stats: &[DynamoStatsRecord]) -> CondensedStats {
     
    let mut stat = CondensedStats {
         execution_stats: Stats {
@@ -172,14 +172,14 @@ pub fn merge_bot_stats(bot_stats: &[BotDynamoStatsRecord]) -> CondensedStats {
 mod bot_stats_tests {
     use std::fs::read_to_string;
 
-    use super::{merge_bot_stats, BotDynamoStatsRecord};
+    use super::{merge_bot_stats, DynamoStatsRecord};
 
     #[test]
     fn combinor_works() {
         
         let bot_stats_raw = read_to_string("./bot_stats.json").unwrap();
         
-        let stats: Vec<BotDynamoStatsRecord> = serde_json::from_str(&bot_stats_raw).unwrap();
+        let stats: Vec<DynamoStatsRecord> = serde_json::from_str(&bot_stats_raw).unwrap();
         
         let combined = merge_bot_stats(&stats);
         

@@ -2,6 +2,7 @@ use bot::{bot_search_and_select_ui, bot_view_ui};
 use itertools::Itertools;
 use loading::loading;
 use main::main_ui;
+use queue_select::queue_select;
 use ratatui::{layout::{self, Constraint, Direction, Layout, Rect}, style::{Color, Stylize}, text::{Line, Span}, widgets::Paragraph, Frame};
 
 use crate::{app::{AppState, AppTab}, THEME};
@@ -11,6 +12,8 @@ mod bot;
 mod bus_select;
 mod loading;
 mod current_state;
+mod queue;
+mod queue_select;
 
 pub fn render_ui(frame: &mut Frame, app: &mut AppState) {
     let area = center_rect(frame.size(), 95, 95);
@@ -22,7 +25,7 @@ pub fn render_ui(frame: &mut Frame, app: &mut AppState) {
     match app.mode {
         crate::app::AppTab::Main => main_ui(app, layout[0], frame),
         crate::app::AppTab::Bot => bot_search_and_select_ui(&mut app.bot_page, layout[0], frame),
-        crate::app::AppTab::Queue => todo!(),
+        crate::app::AppTab::Queue => queue_select(&mut app.queue_search, layout[0], frame),
         crate::app::AppTab::BotView => match &mut app.bot_page.selected_bot {
             Some(bot) => bot_view_ui(bot, layout[0], frame),
             None => panic!("cannot view non-existant bot"),
@@ -30,6 +33,7 @@ pub fn render_ui(frame: &mut Frame, app: &mut AppState) {
         AppTab::BusSelect => bus_select::bus_select(&mut app.bus_select, layout[0], frame),
         AppTab::Loading => loading(app, area, frame),
         AppTab::StateView => current_state::view_app_state(app, area, frame),
+        AppTab::QueueView => todo!(),
        }
     
     render_bottom_bar(&app.mode, layout[1], frame, &app.debug_mode)

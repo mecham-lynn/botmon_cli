@@ -1,13 +1,13 @@
 use std::fmt::Display;
 
-use aws_sdk_dynamodb::{types::AttributeValue, Client};
+use aws_sdk_dynamodb::{types::{AttributeValue, ReturnConsumedCapacity}, Client};
 use chrono::{DateTime, Duration, Utc};
 use color_eyre::eyre::{bail, Context};
 use serde::{Deserialize, Serialize};
 use serde_dynamo::from_item;
 use serde_json::Value;
 
-use crate::{bot_stats::BotDynamoStatsRecord, pages::bot::BotSettings};
+use crate::{bot_stats::DynamoStatsRecord, pages::bot::BotSettings};
 
 #[derive(Debug, Deserialize, Serialize, Clone, Copy)]
 #[serde(rename_all="snake_case")]
@@ -20,16 +20,17 @@ pub enum Period {
     Week,
 }
 
-// impl ToString for Period {
-//     fn to_string(&self) -> String {
-//         match self {
-//             Period::Minute => String::from("minute"),
-//             Period::Minute15 => String::from("minute_15"),
-//             Period::Hour => String::from("hour"),
-//             Period::Day => String::from("day"),
-//         }
-//     }
-// }
+#[derive(Debug, Deserialize, Serialize)]
+pub struct QueueDetails {
+    pub archive: Option<bool>,
+    #[serde(alias = "_clone")]
+    pub clone: Option<String>,
+    pub event: String, 
+    pub max_eid: Option<String>,
+    pub timestamp: Option<i64>,
+    pub v: Option<u32>,
+}
+
 impl Display for Period {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
@@ -132,9 +133,9 @@ impl Display for BotBucket {
     }
 }
 
-pub async fn get_all_bot_stats_for_period(client: &Client, table_name: &str, bucket: AllBuckets) -> color_eyre::Result<Vec<BotDynamoStatsRecord>> {
+pub async fn get_all_bot_stats_for_period(client: &Client, table_name: &str, bucket: AllBuckets) -> color_eyre::Result<Vec<DynamoStatsRecord>> {
     // println!("bucket = {bucket:?}");
-    let mut stats: Vec<BotDynamoStatsRecord> = vec![];
+    let mut stats: Vec<DynamoStatsRecord> = vec![];
     
    //  let query = {
 			// 	TableName: STATS_TABLE,
@@ -215,7 +216,7 @@ pub async fn get_all_bot_details(client: &Client, table_name: &str)-> color_eyre
 /// Queries the dynamo table for all stats in range for a given bot_id.
 /// We HAVE to do a BETWEEN dynamo call and we want to sort descending as well. Which period we want to search should be a param we pass in
 /// 
-pub async fn get_bot_stats_from_time(client: &Client, bot_id: &str ,table_name: &str, start_bucket: BotBucket, end_bucket: BotBucket) -> color_eyre::Result<Vec<BotDynamoStatsRecord>> {
+pub async fn get_stats_from_time(client: &Client, bot_id: &str ,table_name: &str, start_bucket: BotBucket, end_bucket: BotBucket) -> color_eyre::Result<Vec<DynamoStatsRecord>> {
     
     
     // println!("bucket = {start_bucket}");
@@ -265,4 +266,38 @@ pub async fn get_bot_stats_from_time(client: &Client, bot_id: &str ,table_name: 
     
     
     Ok(stats)
+}
+
+pub async fn get_queue_details(client: &Client, table_name: &str) -> color_eyre::Result<Vec<QueueDetails>> {
+    let mut queues = vec![];
+    
+    let output = client
+        .scan()
+        .table_name(table_name)
+        .return_consumed_capacity(ReturnConsumedCapacity::Total)
+        .send()
+        .await
+        .wrap_err("failed to get queue stats")?;
+    
+    if output.items.is_none() {
+        bail!("no items were returned from queue dynamo scan");
+    }
+    
+    let items = output.items();
+    
+    for item in items.iter() {
+        queues.push(
+            match from_item(item.clone()) {
+                Ok(a) => a,
+                Err(e) => {
+                    let json: Value = from_item(item.clone()).unwrap();
+                    bail!("failed to deserialize: '{e}' \n {}", serde_json::to_string(&json).unwrap())
+                },
+            }
+        )
+    }
+    
+    Ok(queues)
+    
+    
 }

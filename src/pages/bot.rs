@@ -7,15 +7,15 @@ use ratatui::widgets::ScrollbarState;
 use serde::{Deserialize, Serialize};
 use tui_input::Input;
 
-use crate::{app::Navigate, bot_stats::{BotDynamoStatsRecord, QueueStats, StatsOrEmpty}};
+use crate::{app::Navigate, bot_stats::{DynamoStatsRecord, QueueStats, Stats, StatsOrEmpty}};
 
 #[derive(Debug, Serialize)]
 pub struct BotViewState {  
    pub vertical_scroll_state: ScrollbarState,
    pub vertical_scroll: usize,
    pub setting: BotSettings,
-   pub full_stats: Vec<BotDynamoStatsRecord>,
-   pub write_stats: HashMap<String, Vec<QueueStats>>,
+   pub full_stats: Vec<DynamoStatsRecord>,
+pub write_stats: HashMap<String, Vec<QueueStats>>,
    pub read_stats: HashMap<String, Vec<QueueStats>>,
    // pub read_connections: Vec<Connection>,
    // pub write_connections: Vec<Connection>
@@ -28,7 +28,7 @@ pub struct BotViewState {
 // }
 
 impl BotViewState {
-    pub fn new(setting: BotSettings, stats: Vec<BotDynamoStatsRecord>) -> Self {
+    pub fn new(setting: BotSettings, stats: Vec<DynamoStatsRecord>) -> Self {
         Self {
             vertical_scroll_state: ScrollbarState::default(),
             vertical_scroll: 0,
@@ -39,7 +39,7 @@ impl BotViewState {
         }
     }
     
-    fn write_stats_from_all_stats(stats: &[BotDynamoStatsRecord]) -> HashMap<String, Vec<QueueStats>> {
+    fn write_stats_from_all_stats(stats: &[DynamoStatsRecord]) -> HashMap<String, Vec<QueueStats>> {
         let mut write_stats = HashMap::new();
         
         stats.iter().for_each(|a| {
@@ -55,7 +55,7 @@ impl BotViewState {
         write_stats
     }
     
-    fn read_stats_from_all_stats(stats: &[BotDynamoStatsRecord]) -> HashMap<String, Vec<QueueStats>> {
+    fn read_stats_from_all_stats(stats: &[DynamoStatsRecord]) -> HashMap<String, Vec<QueueStats>> {
         let mut read_stats = HashMap::new();
         
         stats.iter().for_each(|a| {
@@ -95,7 +95,7 @@ impl Navigate for BotViewState {
 #[derive(Default, Serialize)]
 pub struct BotPageState {
     pub bots: Vec<String>,
-    pub stats: Vec<BotDynamoStatsRecord>, // String for now will need to be a type
+    pub stats: Vec<DynamoStatsRecord>, // String for now will need to be a type
     pub selected_bot_name: Option<String>,
     pub current_select_index: usize,
     pub selected_bot: Option<BotViewState>,

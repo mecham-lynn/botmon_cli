@@ -14,14 +14,16 @@ use serde::Serialize;
 use throbber_widgets_tui::ThrobberState;
 use tui_input::backend::crossterm::EventHandler;
 
-use crate::dynamo::{get_all_bot_details, get_bot_stats_from_time, BotBucket, Period};
+use crate::dynamo::{get_all_bot_details, get_stats_from_time, BotBucket, Period};
 use crate::pages::bus_select::BusSelectState;
+use crate::pages::queue::QueueSearchState;
 use crate::{leo_config::LeoConfig, pages::bot::BotPageState, ui::render_ui, Tui, app_params::AppParams};
 
 #[derive(Serialize)]
 pub struct AppState {
     pub mode: AppTab,
     pub bus_select: BusSelectState,
+    pub queue_search: QueueSearchState,
     pub tab_index: usize,
     pub chart_data: Vec<(f64, f64)>,
     pub bot_page: BotPageState,
@@ -54,6 +56,7 @@ impl Debug for AppState {
         f.debug_struct("AppState")
             .field("mode", &self.mode)
             .field("bus_select", &self.bus_select)
+            .field("queue_search", &self.queue_search)
             .field("tab_index", &self.tab_index)
             .field("chart_data", &self.chart_data)
             .field("bot_page", &self.bot_page)
@@ -172,7 +175,7 @@ impl AppState {
                                     
                                     // Make call to get the stats (DEFAULT is one hour)
                                     
-                                    self.bot_page.stats = get_bot_stats_from_time(&self.client, &bot_id, &self.loaded_config.as_ref().unwrap().leo_stats, start_bucket, end_bucket).await?;
+                                    self.bot_page.stats = get_stats_from_time(&self.client, &bot_id, &self.loaded_config.as_ref().unwrap().leo_stats, start_bucket, end_bucket).await?;
                                     self.bot_page.search.reset();
                                     self.bot_page.search_results.clear();
                                     self.bot_page.get_bot_details()?;
@@ -243,7 +246,6 @@ impl AppState {
                         }
                         Ok(())
                     }
-                    AppTab::Queue => todo!(),
                     AppTab::BotView => match &mut self.bot_page.selected_bot {
                         Some(bot_view_state) => {
                             match key_event.code {
@@ -266,6 +268,55 @@ impl AppState {
                         },
                         None => bail!("cannot navigate a non-existant bot; \n{self:#?}"),
                     },
+                    AppTab::Queue => {
+                        
+                        let list_len = if self.queue_search.search_results.is_empty() {
+                            0_usize
+                        } else {
+                            self.queue_search.search_results.len()
+                        };
+                        
+                        match key_event.code {
+                            KeyCode::Down => {
+                                if list_len > 0 {
+                                    let index  = self.queue_search.current_select_index + list_len;
+                                    self.queue_search.current_select_index = index.saturating_add(1) % list_len;
+                                }
+                            },
+                            KeyCode::Up => {
+                                if list_len > 0 {
+                                    let index  = self.queue_search.current_select_index + list_len;
+                                    self.queue_search.current_select_index = index.saturating_sub(1) % list_len;
+                                }
+                            }, 
+                            KeyCode::Enter => {
+                                if list_len > 0 {
+                                    let queue_name = self.queue_search.search_results[self.queue_search.current_select_index].clone();
+                                    self.queue_search.selected_queue_name = Some(queue_name.clone());
+                                    let queue_id = format!("queue:{queue_name}");
+                                    let start_bucket = BotBucket::new(Period::Minute15, Some(Utc::now() - Duration::hours(1)));
+                                    let end_bucket = BotBucket::new(Period::Minute15, None);
+                                    
+                                    
+                                    // Make call to get the stats (DEFAULT is one hour)
+                                    
+                                    self.queue_search.stats = get_stats_from_time(&self.client, &queue_id, &self.loaded_config.as_ref().unwrap().leo_stats, start_bucket, end_bucket).await?;
+                                    self.queue_search.search.reset();
+                                    self.queue_search.search_results.clear();
+                                    // self.queue_search.get()?;
+                                    self.mode = AppTab::BotView;
+                                }
+                            }
+                            _ => {
+                                // Do the search
+                                self.queue_search.search.handle_event(&Event::Key(key_event));
+                                self.queue_search.search_queues()
+                            }
+                        }
+                        
+                        Ok(())
+                    },
+                    AppTab::QueueView => todo!(),
                     AppTab::StateView => {
                         match key_event.code {
                             KeyCode::Up => {
@@ -395,6 +446,7 @@ impl AppState {
             vertical_scroll: 0,
             debug_mode,
             stop_scroll: false,
+            queue_search: QueueSearchState::default(),
         })
     }
     
@@ -430,6 +482,7 @@ pub enum AppTab {
     BotView,
     Loading,
     StateView,
+    QueueView,
 }
 
 impl AppTab {
@@ -450,7 +503,7 @@ impl AppTab {
                 // ("Home", "Main Menu"),
                 // ("Esc", "Quit")
             ]),
-            AppTab::BotView | AppTab::StateView => keys.append(&mut vec![
+            AppTab::BotView | AppTab::StateView | AppTab::QueueView => keys.append(&mut vec![
                 ("↑", "Scroll Up"),
                 ("↓", "Scroll Down"),
                 ("Tab", "Back")
